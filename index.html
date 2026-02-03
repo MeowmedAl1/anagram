@@ -5,37 +5,64 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Anagram Duel</title>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; background: #f0f2f5; margin: 0; padding: 20px; }
-        .game-container { background: white; padding: 2rem; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); text-align: center; width: 100%; max-width: 500px; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; flex-direction: column; align-items: center; background: #f0f2f5; margin: 0; padding: 20px; }
+        .game-container { background: white; padding: 2rem; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); text-align: center; width: 100%; max-width: 500px; position: relative; min-height: 500px; }
+        
+        /* Overlay for Start Screen */
+        #overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: white; border-radius: 15px; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 10; }
+        
         .letters { display: flex; gap: 10px; justify-content: center; margin: 20px 0; }
-        .letter { background: #4a90e2; color: white; padding: 15px; border-radius: 8px; font-weight: bold; font-size: 1.5rem; text-transform: uppercase; width: 30px; }
-        input { padding: 10px; font-size: 1.2rem; border: 2px solid #ddd; border-radius: 5px; width: 80%; margin-bottom: 10px; }
-        .stats { display: flex; justify-content: space-between; margin-top: 20px; font-weight: bold; }
-        .btn { background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 1rem; }
-        .turn-indicator { color: #e67e22; font-size: 1.2rem; margin-bottom: 10px; }
-        .word-list { text-align: left; height: 100px; overflow-y: auto; border: 1px solid #eee; padding: 10px; margin-top: 10px; font-size: 0.9rem; }
+        .letter { background: #4a90e2; color: white; padding: 15px; border-radius: 8px; font-weight: bold; font-size: 1.5rem; text-transform: uppercase; min-width: 30px; }
+        
+        input { padding: 12px; font-size: 1.2rem; border: 2px solid #ddd; border-radius: 5px; width: 80%; margin-bottom: 10px; text-transform: uppercase; }
+        input:focus { outline: none; border-color: #4a90e2; }
+        
+        .stats { display: flex; justify-content: space-between; margin-top: 20px; font-weight: bold; font-size: 1.1rem; }
+        .controls { display: flex; gap: 10px; justify-content: center; margin-bottom: 10px; }
+        
+        .btn { background: #28a745; color: white; border: none; padding: 12px 24px; border-radius: 5px; cursor: pointer; font-size: 1rem; font-weight: bold; }
+        .btn-start { font-size: 1.5rem; padding: 20px 40px; }
+        .btn-shuffle { background: #6f42c1; }
+        .btn:disabled { background: #ccc; cursor: not-allowed; }
+        
+        .turn-indicator { color: #e67e22; font-size: 1.3rem; font-weight: bold; margin-bottom: 10px; }
+        .word-list { text-align: left; height: 120px; overflow-y: auto; border: 1px solid #eee; padding: 10px; margin-top: 15px; font-size: 0.9rem; background: #fafafa; border-radius: 5px; }
+        #timer { font-size: 1.2rem; margin-bottom: 10px; font-weight: bold; }
+        .error { color: #dc3545; font-size: 0.9rem; margin-top: 5px; height: 20px; }
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
 
 <div class="game-container">
+    <div id="overlay">
+        <h2>Ready for Anagram Duel?</h2>
+        <p>Two players, 60 seconds each.</p>
+        <button class="btn btn-start" onclick="initGame()">START GAME</button>
+    </div>
+
     <h1>Anagram Duel</h1>
     <div id="turn-display" class="turn-indicator">Player 1's Turn</div>
-    <div id="timer">Time: 60s</div>
+    <div id="timer">60s</div>
     
     <div class="letters" id="letter-bank"></div>
 
+    <div class="controls">
+        <button class="btn btn-shuffle" onclick="shuffleLetters()">Shuffle</button>
+    </div>
+
     <input type="text" id="word-input" placeholder="Type word..." autocomplete="off">
+    <div id="error-msg" class="error"></div>
     <br>
     <button class="btn" onclick="submitWord()" id="submit-btn">Submit Word</button>
 
     <div class="stats">
-        <div>P1 Score: <span id="p1-score">0</span></div>
-        <div>P2 Score: <span id="p2-score">0</span></div>
+        <div>P1: <span id="p1-score">0</span></div>
+        <div>P2: <span id="p2-score">0</span></div>
     </div>
 
     <div class="word-list" id="word-history"></div>
-    <button class="btn" style="margin-top:20px; background:#6c757d;" onclick="resetGame()">New Game</button>
+    <button class="btn" style="margin-top:20px; background:#6c757d;" onclick="resetToMenu()">Quit to Menu</button>
 </div>
 
 <script>
@@ -46,14 +73,24 @@
     let timerInterval;
     let usedWords = new Set();
 
-    function generateUniqueLetters() {
-        const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-        let shuffled = alphabet.split('').sort(() => 0.5 - Math.random());
-        return shuffled.slice(0, 6);
+    // High frequency letters to ensure playable combinations
+    const commonVowels = 'AEIOU';
+    const commonConsonants = 'RSTLNMPBDG';
+
+    function initGame() {
+        document.getElementById('overlay').classList.add('hidden');
+        resetGameLogic();
+        startTurn();
     }
 
-    function startTurn() {
-        currentLetters = generateUniqueLetters();
+    function generatePlayableLetters() {
+        let v = commonVowels.split('').sort(() => 0.5 - Math.random());
+        let c = commonConsonants.split('').sort(() => 0.5 - Math.random());
+        // 2 Vowels + 4 Consonants = 6 unique letters
+        return [v[0], v[1], c[0], c[1], c[2], c[3]].sort(() => 0.5 - Math.random());
+    }
+
+    function renderLetters() {
         const bank = document.getElementById('letter-bank');
         bank.innerHTML = '';
         currentLetters.forEach(l => {
@@ -62,41 +99,65 @@
             div.textContent = l;
             bank.appendChild(div);
         });
+    }
+
+    function shuffleLetters() {
+        currentLetters.sort(() => 0.5 - Math.random());
+        renderLetters();
+    }
+
+    function startTurn() {
+        currentLetters = generatePlayableLetters();
+        renderLetters();
         
         timeLeft = 60;
+        document.getElementById('timer').textContent = `${timeLeft}s`;
         document.getElementById('word-input').value = '';
         document.getElementById('word-input').focus();
+        document.getElementById('error-msg').textContent = '';
         
         clearInterval(timerInterval);
         timerInterval = setInterval(() => {
             timeLeft--;
-            document.getElementById('timer').textContent = `Time: ${timeLeft}s`;
+            document.getElementById('timer').textContent = `${timeLeft}s`;
             if (timeLeft <= 0) endTurn();
         }, 1000);
     }
 
-    function submitWord() {
+    async function submitWord() {
         const input = document.getElementById('word-input').value.toUpperCase().trim();
-        if (isValid(input)) {
-            const points = Math.pow(2, input.length - 3) * 100;
-            scores[currentPlayer] += points;
-            usedWords.add(input);
-            updateUI();
-            document.getElementById('word-input').value = '';
-            addHistory(input, points);
-        }
-    }
+        const errorDiv = document.getElementById('error-msg');
+        errorDiv.textContent = '';
 
-    function isValid(word) {
-        if (word.length < 3) return false;
-        if (usedWords.has(word)) return false;
+        if (input.length < 3) { errorDiv.textContent = "Too short!"; return; }
+        if (usedWords.has(input)) { errorDiv.textContent = "Already used!"; return; }
+        
         let tempLetters = [...currentLetters];
-        for (let char of word) {
+        for (let char of input) {
             let index = tempLetters.indexOf(char);
-            if (index === -1) return false;
+            if (index === -1) { errorDiv.textContent = "Invalid letters!"; return; }
             tempLetters.splice(index, 1);
         }
-        return true;
+
+        try {
+            document.getElementById('submit-btn').disabled = true;
+            const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${input}`);
+            if (response.ok) {
+                const points = Math.pow(2, input.length - 3) * 100;
+                scores[currentPlayer] += points;
+                usedWords.add(input);
+                updateUI();
+                document.getElementById('word-input').value = '';
+                addHistory(input, points);
+            } else {
+                errorDiv.textContent = "Not in dictionary!";
+            }
+        } catch (e) {
+            errorDiv.textContent = "API Error";
+        } finally {
+            document.getElementById('submit-btn').disabled = false;
+            document.getElementById('word-input').focus();
+        }
     }
 
     function endTurn() {
@@ -104,12 +165,12 @@
         if (currentPlayer === 1) {
             currentPlayer = 2;
             document.getElementById('turn-display').textContent = "Player 2's Turn";
-            alert("Player 1 Time Up! Player 2, your turn.");
+            alert("Player 1 Time's Up! Player 2, get ready.");
             startTurn();
         } else {
             const winner = scores[1] > scores[2] ? "Player 1" : scores[2] > scores[1] ? "Player 2" : "It's a Tie";
-            alert(`Game Over! ${winner} wins!\nP1: ${scores[1]} | P2: ${scores[2]}`);
-            resetGame();
+            alert(`Game Over!\n${winner} wins!\n\nP1: ${scores[1]} | P2: ${scores[2]}`);
+            resetToMenu();
         }
     }
 
@@ -120,24 +181,26 @@
 
     function addHistory(word, pts) {
         const hist = document.getElementById('word-history');
-        hist.innerHTML = `<div>P${currentPlayer}: ${word} (+${pts})</div>` + hist.innerHTML;
+        hist.innerHTML = `<div>P${currentPlayer}: <strong>${word}</strong> (+${pts})</div>` + hist.innerHTML;
     }
 
-    function resetGame() {
+    function resetGameLogic() {
         scores = { 1: 0, 2: 0 };
         currentPlayer = 1;
         usedWords.clear();
         document.getElementById('word-history').innerHTML = '';
         document.getElementById('turn-display').textContent = "Player 1's Turn";
         updateUI();
-        startTurn();
+    }
+
+    function resetToMenu() {
+        clearInterval(timerInterval);
+        document.getElementById('overlay').classList.remove('hidden');
     }
 
     document.getElementById('word-input').addEventListener('keypress', (e) => {
         if (e.key === 'Enter') submitWord();
     });
-
-    startTurn();
 </script>
 </body>
 </html>
