@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anagram Duel</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; background: #f0f2f5; margin: 0; padding: 20px; }
+        .game-container { background: white; padding: 2rem; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); text-align: center; width: 100%; max-width: 500px; }
+        .letters { display: flex; gap: 10px; justify-content: center; margin: 20px 0; }
+        .letter { background: #4a90e2; color: white; padding: 15px; border-radius: 8px; font-weight: bold; font-size: 1.5rem; text-transform: uppercase; width: 30px; }
+        input { padding: 10px; font-size: 1.2rem; border: 2px solid #ddd; border-radius: 5px; width: 80%; margin-bottom: 10px; }
+        .stats { display: flex; justify-content: space-between; margin-top: 20px; font-weight: bold; }
+        .btn { background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 1rem; }
+        .btn:disabled { background: #ccc; }
+        .turn-indicator { color: #e67e22; font-size: 1.2rem; margin-bottom: 10px; }
+        .word-list { text-align: left; height: 100px; overflow-y: auto; border: 1px solid #eee; padding: 10px; margin-top: 10px; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+
+<div class="game-container">
+    <h1>Anagram Duel</h1>
+    <div id="turn-display" class="turn-indicator">Player 1's Turn</div>
+    <div id="timer">Time: 30s</div>
+    
+    <div class="letters" id="letter-bank">
+        </div>
+
+    <input type="text" id="word-input" placeholder="Type word..." autocomplete="off">
+    <br>
+    <button class="btn" onclick="submitWord()" id="submit-btn">Submit Word</button>
+
+    <div class="stats">
+        <div>P1 Score: <span id="p1-score">0</span></div>
+        <div>P2 Score: <span id="p2-score">0</span></div>
+    </div>
+
+    <div class="word-list" id="word-history"></div>
+    <button class="btn" style="margin-top:20px; background:#6c757d;" onclick="resetGame()">New Game</button>
+</div>
+
+<script>
+    let currentPlayer = 1;
+    let scores = { 1: 0, 2: 0 };
+    let currentLetters = [];
+    let timeLeft = 30;
+    let timerInterval;
+    let usedWords = new Set();
+
+    const vowels = 'AEIOU';
+    const consonants = 'BCDFGHJKLMNPQRSTVWXYZ';
+
+    function generateLetters() {
+        let result = [];
+        for(let i=0; i<2; i++) result.push(vowels[Math.floor(Math.random() * vowels.length)]);
+        for(let i=0; i<4; i++) result.push(consonants[Math.floor(Math.random() * consonants.length)]);
+        return result.sort(() => Math.random() - 0.5);
+    }
+
+    function startTurn() {
+        currentLetters = generateLetters();
+        const bank = document.getElementById('letter-bank');
+        bank.innerHTML = '';
+        currentLetters.forEach(l => {
+            const div = document.createElement('div');
+            div.className = 'letter';
+            div.textContent = l;
+            bank.appendChild(div);
+        });
+        
+        timeLeft = 30;
+        document.getElementById('word-input').value = '';
+        document.getElementById('word-input').focus();
+        
+        clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            document.getElementById('timer').textContent = `Time: ${timeLeft}s`;
+            if (timeLeft <= 0) endTurn();
+        }, 1000);
+    }
+
+    function submitWord() {
+        const input = document.getElementById('word-input').value.toUpperCase().trim();
+        if (isValid(input)) {
+            const points = calculatePoints(input.length);
+            scores[currentPlayer] += points;
+            usedWords.add(input);
+            updateUI();
+            document.getElementById('word-input').value = '';
+            addHistory(input, points);
+        }
+    }
+
+    function isValid(word) {
+        if (word.length < 3) return false;
+        if (usedWords.has(word)) return false;
+        
+        let tempLetters = [...currentLetters];
+        for (let char of word) {
+            let index = tempLetters.indexOf(char);
+            if (index === -1) return false;
+            tempLetters.splice(index, 1);
+        }
+        return true;
+    }
+
+    function calculatePoints(length) {
+        // Scoring formula: 3=100, 4=200, 5=400, 6=800
+        return Math.pow(2, length - 3) * 100;
+    }
+
+    function endTurn() {
+        clearInterval(timerInterval);
+        if (currentPlayer === 1) {
+            currentPlayer = 2;
+            document.getElementById('turn-display').textContent = "Player 2's Turn";
+            alert("Player 1 Done! Player 2, get ready.");
+            startTurn();
+        } else {
+            const winner = scores[1] > scores[2] ? "Player 1" : scores[2] > scores[1] ? "Player 2" : "It's a Tie";
+            alert(`Game Over! ${winner} wins!\nFinal Scores:\nP1: ${scores[1]}\nP2: ${scores[2]}`);
+            resetGame();
+        }
+    }
+
+    function updateUI() {
+        document.getElementById('p1-score').textContent = scores[1];
+        document.getElementById('p2-score').textContent = scores[2];
+    }
+
+    function addHistory(word, pts) {
+        const hist = document.getElementById('word-history');
+        hist.innerHTML = `<div>P${currentPlayer}: ${word} (+${pts})</div>` + hist.innerHTML;
+    }
+
+    function resetGame() {
+        scores = { 1: 0, 2: 0 };
+        currentPlayer = 1;
+        usedWords.clear();
+        document.getElementById('word-history').innerHTML = '';
+        document.getElementById('turn-display').textContent = "Player 1's Turn";
+        updateUI();
+        startTurn();
+    }
+
+    document.getElementById('word-input').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') submitWord();
+    });
+
+    startTurn();
+</script>
+
+</body>
+</html>
